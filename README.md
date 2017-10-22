@@ -1,0 +1,2 @@
+# sefi
+Simple EFI
