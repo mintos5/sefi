@@ -5,6 +5,55 @@ static VOID list_directory() {
 
 }
 
+static EFI_STATUS interactive_mode () {
+
+}
+
+static EFI_STATUS boot_efi (EFI_HANDLE parentImage, EFI_DEVICE_PATH *path, CHAR16 *options) {
+    EFI_STATUS err;
+
+    if (!path) {
+        Print(L"Error getting device path.");
+        uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
+        return EFI_INVALID_PARAMETER;
+    }
+
+    EFI_HANDLE nextImage;
+    err = uefi_call_wrapper(BS->LoadImage, 6, FALSE, parentImage, path, NULL, 0, &nextImage);
+    if (EFI_ERROR(err)) {
+        Print(L"Error loading testing image: %r", err);
+        uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
+        if (options){
+            FreePool(options);
+        }
+        FreePool(path);
+        return err;
+    }
+    if (options) {
+        EFI_LOADED_IMAGE *loadedNextImage;
+
+        err = uefi_call_wrapper(BS->OpenProtocol, 6, nextImage, &LoadedImageProtocol, &loadedNextImage,
+                                parentImage, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+        if (EFI_ERROR(err)) {
+            Print(L"Error getting LoadedImageProtocol handle: %r", err);
+            uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
+            uefi_call_wrapper(BS->UnloadImage, 1, nextImage);
+            FreePool(options);
+            FreePool(path);
+            return err;
+        }
+        loadedNextImage->LoadOptions = options;
+        loadedNextImage->LoadOptionsSize = (StrLen(loadedNextImage->LoadOptions)+1) * sizeof(CHAR16);
+    }
+    err = uefi_call_wrapper(BS->StartImage, 3, nextImage, NULL, NULL);
+
+    //UNLOADING
+    uefi_call_wrapper(BS->UnloadImage, 1, nextImage);
+    FreePool(options);
+    FreePool(path);
+    return err;
+}
+
 EFI_STATUS EFIAPI efi_main (EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
     UINTN index, handleBuffSize;
     EFI_STATUS err;
@@ -138,53 +187,8 @@ EFI_STATUS EFIAPI efi_main (EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTabl
             return err;
             break;
         default:
-
             ;
     }
-    Print(L"DEBUG1");
-    if (!path) {
-        Print(L"Error getting device path.");
-        uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
-        return EFI_INVALID_PARAMETER;
-    }
-
-    EFI_HANDLE nextImage;
-    err = uefi_call_wrapper(BS->LoadImage, 6, FALSE, imageHandle, path, NULL, 0, &nextImage);
-    if (EFI_ERROR(err)) {
-        Print(L"Error loading testing image: %r", err);
-        uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
-        if (options){
-            FreePool(options);
-        }
-        FreePool(path);
-        return err;
-    }
-    Print(L"DEBUG2");
-    if (options) {
-        EFI_LOADED_IMAGE *loadedNextImage;
-
-        err = uefi_call_wrapper(BS->OpenProtocol, 6, nextImage, &LoadedImageProtocol, &loadedNextImage,
-                                imageHandle, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
-        if (EFI_ERROR(err)) {
-            Print(L"Error getting LoadedImageProtocol handle: %r", err);
-            uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
-            uefi_call_wrapper(BS->UnloadImage, 1, nextImage);
-            FreePool(options);
-            FreePool(path);
-            return err;
-        }
-        loadedNextImage->LoadOptions = options;
-        loadedNextImage->LoadOptionsSize = (StrLen(loadedNextImage->LoadOptions)+1) * sizeof(CHAR16);
-    }
-    Print(L"DEBUG3");
-    err = uefi_call_wrapper(BS->StartImage, 3, nextImage, NULL, NULL);
-
-    //UNLOADING
-    //When I go here and when i do not go here...
-    Print(L"END1");
-    uefi_call_wrapper(BS->UnloadImage, 1, nextImage);
-    FreePool(options);
-    FreePool(path);
-    Print(L"END2");
+    err = boot_efi(imageHandle,path,options);
     return err;
 }
