@@ -1,16 +1,21 @@
 #include <efi.h>
 #include <efilib.h>
+#define MAX_LINES 13
 #define EFI_AUTO_MODE 99
 #define EFI_INTERACT_MODE 100
+#define EFI_SHUTDOWN 101
+#define EFI_RESTART 102
 
 #define KEY_INPUT_UNK 0
 #define KEY_INPUT_NUM 1
 #define KEY_INPUT_CHAR 2
 
 typedef struct config{
+    CHAR16 *name;
     CHAR16 *path;
     CHAR16 *options;
     struct config *next;
+    struct config *previous;
 }CONFIG;
 
 typedef struct {
@@ -19,104 +24,166 @@ typedef struct {
     CHAR16 symbol;
 } KEY_INPUT;
 
-static VOID read_line() {
-    //todo with this enable changig of boot options for automatic and interactive mode
+static VOID free_config(CONFIG *headConfigList){
+    //go to the end of list:
+    CONFIG * configList = headConfigList;
+    CONFIG *temp;
+    if (configList == NULL){
+        return;
+    }
+    //move to the end of linked list
+    while (configList->next){
+        configList = configList->next;
+    }
+    //remove them
+    while (configList){
+        temp = configList->previous;
+        if (configList->name){
+            FreePool(configList->name);
+        }
+        if (configList->path){
+            FreePool(configList->path);
+        }
+        if (configList->options){
+            FreePool(configList->options);
+        }
+        FreePool(configList);
+        configList = temp;
+    }
+}
 
+static VOID read_line() {
+    //todo enable changing of boot options for automatic and interactive mode
 }
 
 static KEY_INPUT read_symbol(){
+    EFI_STATUS status;
     KEY_INPUT out;
+    out.type = KEY_INPUT_UNK;
+    out.number = 0;
     UINTN index;
     EFI_INPUT_KEY key;
 
     Print(L">");
-    uefi_call_wrapper(BS->WaitForEvent, 3, 1, &ST->ConIn->WaitForKey, &index);
-    uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2, ST->ConIn, &key);
-    switch (key.UnicodeChar) {
-        case '0':
-            out.type = KEY_INPUT_NUM;
-            out.number = 0;
-            out.symbol = '0';
-            break;
-        case '1':
-            out.type = KEY_INPUT_NUM;
-            out.number = 1;
-            out.symbol = '1';
-            break;
-        case '2':
-            out.type = KEY_INPUT_NUM;
-            out.number = 2;
-            out.symbol = '2';
-            break;
-        case '3':
-            out.type = KEY_INPUT_NUM;
-            out.number = 3;
-            out.symbol = '3';
-            break;
-        case '4':
-            out.type = KEY_INPUT_NUM;
-            out.number = 4;
-            out.symbol = '4';
-            break;
-        case '5':
-            out.type = KEY_INPUT_NUM;
-            out.number = 5;
-            out.symbol = '5';
-            break;
-        case '6':
-            out.type = KEY_INPUT_NUM;
-            out.number = 6;
-            out.symbol = '6';
-            break;
-        case '7':
-            out.type = KEY_INPUT_NUM;
-            out.number = 7;
-            out.symbol = '7';
-            break;
-        case '8':
-            out.type = KEY_INPUT_NUM;
-            out.number = 8;
-            out.symbol = '8';
-            break;
-        case '9':
-            out.type = KEY_INPUT_NUM;
-            out.number = 9;
-            out.symbol = '9';
-            break;
-        case 'i':
-        case 'I':
-            out.type = KEY_INPUT_CHAR;
-            out.symbol = 'i';
-            break;
-        case 'a':
-        case 'A':
-            out.type = KEY_INPUT_CHAR;
-            out.symbol = 'a';
-            break;
-        case 'r':
-        case 'R':
-            out.type = KEY_INPUT_CHAR;
-            out.symbol = 'r';
-        case 'o':
-        case 'O':
-            out.type = KEY_INPUT_CHAR;
-            out.symbol = 'o';
-        case 's':
-        case 'S':
-            out.type = KEY_INPUT_CHAR;
-            out.symbol = 's';
-        case 'h':
-        case 'H':
-            out.type = KEY_INPUT_CHAR;
-            out.symbol = 'h';
-        default:
-            out.type = KEY_INPUT_UNK;
+    while (1){
+        status = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2, ST->ConIn, &key);
+        if (EFI_ERROR(status)) {
+            uefi_call_wrapper(BS->WaitForEvent, 3, 1, &ST->ConIn->WaitForKey, &index);
+            continue;
+        }
+        else {
+            Print(L"%c",key.UnicodeChar);
+            if (key.UnicodeChar == CHAR_LINEFEED || key.UnicodeChar == CHAR_CARRIAGE_RETURN){
+                Print(L"\n");
+                break;
+            }
+            switch (key.UnicodeChar) {
+                case '0':
+                    out.type = KEY_INPUT_NUM;
+                    out.number = out.number*10;
+                    out.number += 0;
+                    out.symbol = '0';
+                    break;
+                case '1':
+                    out.type = KEY_INPUT_NUM;
+                    out.number = out.number*10;
+                    out.number += 1;
+                    out.symbol = '1';
+                    break;
+                case '2':
+                    out.type = KEY_INPUT_NUM;
+                    out.number = out.number*10;
+                    out.number += 2;
+                    out.symbol = '2';
+                    break;
+                case '3':
+                    out.type = KEY_INPUT_NUM;
+                    out.number = out.number*10;
+                    out.number += 3;
+                    out.symbol = '3';
+                    break;
+                case '4':
+                    out.type = KEY_INPUT_NUM;
+                    out.number = out.number*10;
+                    out.number += 4;
+                    out.symbol = '4';
+                    break;
+                case '5':
+                    out.type = KEY_INPUT_NUM;
+                    out.number = out.number*10;
+                    out.number += 5;
+                    out.symbol = '5';
+                    break;
+                case '6':
+                    out.type = KEY_INPUT_NUM;
+                    out.number = out.number*10;
+                    out.number += 6;
+                    out.symbol = '6';
+                    break;
+                case '7':
+                    out.type = KEY_INPUT_NUM;
+                    out.number = out.number*10;
+                    out.number += 7;
+                    out.symbol = '7';
+                    break;
+                case '8':
+                    out.type = KEY_INPUT_NUM;
+                    out.number = out.number*10;
+                    out.number += 8;
+                    out.symbol = '8';
+                    break;
+                case '9':
+                    out.type = KEY_INPUT_NUM;
+                    out.number = out.number*10;
+                    out.number += 9;
+                    out.symbol = '9';
+                    break;
+                case 'i':
+                case 'I':
+                    out.type = KEY_INPUT_CHAR;
+                    out.symbol = 'i';
+                    break;
+                case 'a':
+                case 'A':
+                    out.type = KEY_INPUT_CHAR;
+                    out.symbol = 'a';
+                    break;
+                case 'r':
+                case 'R':
+                    out.type = KEY_INPUT_CHAR;
+                    out.symbol = 'r';
+                    break;
+                case 'o':
+                case 'O':
+                    out.type = KEY_INPUT_CHAR;
+                    out.symbol = 'o';
+                    break;
+                case 's':
+                case 'S':
+                    out.type = KEY_INPUT_CHAR;
+                    out.symbol = 's';
+                    break;
+                case 'h':
+                case 'H':
+                    out.type = KEY_INPUT_CHAR;
+                    out.symbol = 'h';
+                    break;
+                case 'n':
+                case 'N':
+                    out.type = KEY_INPUT_CHAR;
+                    out.symbol = 'n';
+                    break;
+                case 'b':
+                case 'B':
+                    out.type = KEY_INPUT_CHAR;
+                    out.symbol = 'b';
+                    break;
+                default:
+                    out.type = KEY_INPUT_UNK;
+            }
+        }
     }
     return out;
-}
-
-static VOID list_directory() {
-
 }
 
 static UINTN list_disks(EFI_HANDLE *diskHandleBuff, UINTN *workingVolumes, UINTN workingVolumesCount){
@@ -128,7 +195,7 @@ static UINTN list_disks(EFI_HANDLE *diskHandleBuff, UINTN *workingVolumes, UINTN
     for (index=0;index<workingVolumesCount;index++) {
         pathDisk = DevicePathFromHandle(diskHandleBuff[workingVolumes[index]]);
         string = DevicePathToStr(pathDisk);
-        Print(L"%d: ",index);
+        Print(L"[%d] ",index);
         Print(L"%s\n",string);
         FreePool(string);
     }
@@ -148,41 +215,384 @@ static UINTN list_disks(EFI_HANDLE *diskHandleBuff, UINTN *workingVolumes, UINTN
     }
 }
 
+static UINTN list_directory(EFI_FILE *rootDir,CHAR16 **filePath) {
+    EFI_STATUS status;
+    KEY_INPUT key;
+    UINTN selection,i,linesCounter;
+    CHAR16 *file;
+    file = NULL;
+    EFI_FILE_INFO *info;
+
+    Print(L"Please select boot file:\n");
+
+    UINTN bufSize = SIZE_OF_EFI_FILE_INFO + 1024;
+    info = AllocatePool(bufSize);
+
+    status = uefi_call_wrapper(rootDir->SetPosition,2,rootDir,0);
+    if (EFI_ERROR(status)) {
+        Print(L"Error setting dir position: %r ", status);
+        uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
+        return 0;   //bad value
+    }
+    selection = 0;
+    linesCounter = 0;
+    while (1){
+        //process input
+        if (linesCounter>=MAX_LINES){
+            //this is not the last file
+            if (bufSize != 0){
+                Print(L"Press n to show remaining files\n");
+            }
+            //read input from keyboard
+            key = read_symbol();
+            if (key.type == KEY_INPUT_CHAR || key.type == KEY_INPUT_UNK){
+                //continue with listing root_directory
+                if (key.symbol == 'i'){
+                    Print(L"Restarting to interactive mode\n");
+                    FreePool(info);
+                    return 0;
+                }
+                linesCounter = 0;
+                continue;
+            }
+            else if (key.type == KEY_INPUT_NUM){
+                //check for bigger input
+                if (key.number > selection){
+                    //bad input
+                    Print(L"Wrong number, please select another option\n");
+                    continue;
+                }
+                //reset the file position
+                status = uefi_call_wrapper(rootDir->SetPosition,2,rootDir,0);
+                if (EFI_ERROR(status)) {
+                    Print(L"Error setting dir position: %r \n", status);
+                    FreePool(info);
+                    return 0;   //bad value
+                }
+                //move to correct info
+                for (i=0;i<=key.number;i++){
+                    bufSize = SIZE_OF_EFI_FILE_INFO + 1024;
+                    status = uefi_call_wrapper(rootDir->Read,3,rootDir,&bufSize,info);
+                    if (EFI_ERROR(status)) {
+                        Print(L"Error moving dir to corect position: %r \n", status);
+                        FreePool(info);
+                        return 0;
+                    }
+                }
+                //check if it is directory and call this function again
+                if (info->Attribute & EFI_FILE_DIRECTORY){
+                    //get the EFI_FILE
+                    EFI_FILE_HANDLE nextDir;
+                    status = uefi_call_wrapper(rootDir->Open,5,rootDir,&nextDir,info->FileName,EFI_FILE_MODE_READ,0);
+                    if (EFI_ERROR(status)) {
+                        Print(L"Error getting next_dir: %r \n", status);
+                        FreePool(info);
+                        return 0;
+                    }
+                    CHAR16 *tempFile = NULL;
+                    UINTN returnSize = list_directory(nextDir,&tempFile);
+                    if (returnSize==0){
+                        //some error
+                        FreePool(info);
+                        return 0;
+                    }
+                    //combine the paths
+                    UINTN pathSize = (1 + StrLen(info->FileName) + returnSize);
+
+                    file = AllocateZeroPool( pathSize * sizeof(CHAR16));
+                    SPrint(file,pathSize,L"\\");
+                    CopyMem(file+1,info->FileName,StrLen(info->FileName) * sizeof(CHAR16));
+                    CopyMem(file+1+StrLen(info->FileName),tempFile,returnSize * sizeof(CHAR16));
+                    *filePath = file;
+                    FreePool(tempFile);
+                    FreePool(info);
+                    uefi_call_wrapper(rootDir->Close,1,rootDir);
+                    return pathSize;
+                }
+                //we have the file_name super....
+                UINTN pathSize = (2 + StrLen(info->FileName));
+                file = AllocateZeroPool( pathSize * sizeof(CHAR16));
+                SPrint(file,pathSize,L"\\");
+                CopyMem(file+1,info->FileName,StrLen(info->FileName)* sizeof(CHAR16));
+                *filePath = file;
+                FreePool(info);
+                uefi_call_wrapper(rootDir->Close,1,rootDir);
+                return pathSize;
+            }
+        }
+
+        //Listing all files:
+        //reading all files from directory
+        bufSize = SIZE_OF_EFI_FILE_INFO + 1024;
+        status = uefi_call_wrapper(rootDir->Read,3,rootDir,&bufSize,info);
+        if (EFI_ERROR(status)) {
+            Print(L"Error reading dir: %r ", status);
+            FreePool(info);
+            return 0;
+        }
+        //the last file
+        if (bufSize == 0) {
+            linesCounter = MAX_LINES;
+            continue;
+        }
+        else {
+            Print(L"[%d] ",selection);
+            if (info->Attribute & EFI_FILE_DIRECTORY){
+                Print(L"dir: ");
+            }
+            Print(L"%s\n",info->FileName);
+        }
+        selection++;
+        linesCounter++;
+    }
+}
+
 static EFI_STATUS get_config(EFI_HANDLE diskHandle, const CHAR16 *name, CONFIG *configList){
-    //todo reading configs from file, first just hard code...
-    EFI_STATUS status = 0;
+    EFI_FILE_INFO *fileInfoDir = NULL;
+    UINTN bufSize = SIZE_OF_EFI_FILE_INFO + 1024;
+    EFI_FILE *rootDir = NULL;
+    EFI_STATUS status;
+    CONFIG *actualConfig;
+    CONFIG *tempConfig;
+    actualConfig = configList;
+
+    CHAR16 *buff;
+    UINTN buffLenght;
+
+    fileInfoDir = AllocatePool(bufSize);
+    rootDir = LibOpenRoot(diskHandle);
+    if (rootDir==NULL){
+        return EFI_INVALID_PARAMETER;
+    }
+    EFI_FILE_HANDLE sefiDir;
+    //sefiDir creation
+    status = uefi_call_wrapper(rootDir->Open,5,rootDir,&sefiDir,name,EFI_FILE_MODE_READ,0);
+    if (EFI_ERROR(status)) {
+        Print(L"Error getting to config/options directory: %r \n", status);
+        uefi_call_wrapper(rootDir->Close, 1, rootDir);
+        return 0;
+    }
+    uefi_call_wrapper(rootDir->Close, 1, rootDir);
+
+    while (1){
+        bufSize = SIZE_OF_EFI_FILE_INFO + 1024;
+        status = uefi_call_wrapper(sefiDir->Read,3,sefiDir,&bufSize,fileInfoDir);
+        if (EFI_ERROR(status)) {
+            Print(L"Error reading dir: %r ", status);
+            FreePool(fileInfoDir);
+            uefi_call_wrapper(sefiDir->Close, 1, sefiDir);
+            return 0;
+        }
+        //the last file
+        if (bufSize == 0) {
+            break;
+        }
+        //work only with directories
+        if (fileInfoDir->Attribute & EFI_FILE_DIRECTORY){
+            //do not work with this directories
+            if ( StrCmp(fileInfoDir->FileName,L"..") == 0){
+                continue;
+            }
+            if (StrCmp(fileInfoDir->FileName,L".") == 0){
+                continue;
+            }
+            //check if actualConfig has something
+            if (actualConfig->name){
+                tempConfig = AllocateZeroPool(sizeof(CONFIG));
+                tempConfig->previous = actualConfig;
+                actualConfig->next = tempConfig;
+                actualConfig = tempConfig;
+            }
+            UINTN nameSize = StrLen(fileInfoDir->FileName)+1;
+
+            actualConfig->name = AllocateZeroPool(nameSize * sizeof(CHAR16));
+            CopyMem(actualConfig->name,fileInfoDir->FileName,nameSize * sizeof(CHAR16));
+
+            EFI_FILE_HANDLE configDir;
+            //configDir creation, getting to directory
+            status = uefi_call_wrapper(sefiDir->Open,5,sefiDir,&configDir,fileInfoDir->FileName,EFI_FILE_MODE_READ,0);
+            if (EFI_ERROR(status)) {
+                Print(L"Error getting to config/options directory: %r \n", status);
+                FreePool(fileInfoDir);
+                uefi_call_wrapper(sefiDir->Close, 1, sefiDir);
+                return 0;
+            }
+            EFI_FILE_HANDLE handleItem, handleOption;
+
+            //READING the item.conf file
+            //handleItem creation
+            status = uefi_call_wrapper(configDir->Open, 5, configDir, &handleItem, L"item.conf", EFI_FILE_MODE_READ, 0);
+            if (EFI_ERROR(status)){
+                Print(L"Error getting to open item.conf: %r \n", status);
+                FreePool(fileInfoDir);
+                uefi_call_wrapper(configDir->Close, 1, configDir);
+                continue;
+            }
+            EFI_FILE_INFO *infoConf;
+            infoConf = LibFileInfo(handleItem);
+            buffLenght = infoConf->FileSize;
+            buff = AllocatePool(buffLenght);
+            //buffLenght is changed after calling this function
+            status = uefi_call_wrapper(handleItem->Read, 3, handleItem, &buffLenght, buff);
+            if (EFI_ERROR(status)){
+                Print(L"Error getting to read item.conf: %r \n", status);
+                FreePool(infoConf);
+                FreePool(fileInfoDir);
+                uefi_call_wrapper(handleItem->Close, 1, handleItem);
+                uefi_call_wrapper(configDir->Close, 1, configDir);
+                continue;
+            }
+            CHAR16 *finalPath = NULL;
+            finalPath = AllocateZeroPool(buffLenght);
+            //+1 to remove BOM header
+            CopyMem(finalPath,buff+1,buffLenght-2);
+            actualConfig->path = finalPath;
+            FreePool(buff);
+            FreePool(infoConf);
+            uefi_call_wrapper(handleItem->Close, 1, handleItem);
+
+            //READING the options.conf file
+            //handleOption creation
+            status = uefi_call_wrapper(configDir->Open, 5, configDir, &handleOption, L"options.conf", EFI_FILE_MODE_READ, 0);
+            if (EFI_ERROR(status)){
+                Print(L"Error getting to open options.conf: %r \n", status);
+                uefi_call_wrapper(configDir->Close, 1, configDir);
+                continue;
+            }
+            infoConf = LibFileInfo(handleOption);
+            buffLenght = infoConf->FileSize;
+            buff = AllocatePool(buffLenght);
+            //buffLenght is changed after calling this function
+            status = uefi_call_wrapper(handleOption->Read, 3, handleOption, &buffLenght, buff);
+            if (EFI_ERROR(status)){
+                Print(L"Error getting to read options.conf: %r \n", status);
+                FreePool(infoConf);
+                uefi_call_wrapper(handleOption->Close, 1, handleOption);
+                uefi_call_wrapper(configDir->Close, 1, configDir);
+                continue;
+            }
+            finalPath = NULL;
+            finalPath = AllocateZeroPool(buffLenght);
+            //+1 to remove BOM header
+            CopyMem(finalPath,buff+1,buffLenght-2);
+            actualConfig->options = finalPath;
+            FreePool(buff);
+            FreePool(infoConf);
+            uefi_call_wrapper(handleOption->Close, 1, handleOption);
+
+            uefi_call_wrapper(configDir->Close, 1, configDir);
+        }
+    }
+    FreePool(fileInfoDir);
+    uefi_call_wrapper(sefiDir->Close, 1, sefiDir);
     return status;
 }
 
 static EFI_STATUS automatic_mode (EFI_HANDLE diskHandle, CONFIG *configList, EFI_DEVICE_PATH **path, CHAR16 **options) {
+    EFI_DEVICE_PATH *outPath;
+    CHAR16 *outOptions;
     EFI_STATUS status = 0;
     KEY_INPUT key;
+    CONFIG *actualConfig = configList;
+    CONFIG **workingCongigs;
+    //check which config is ok
+    EFI_FILE *rootDir = NULL;
+    EFI_FILE_HANDLE fileHandle;
 
-
-    Print(L"AUTOMATIC_MODE\n");
-    key = read_symbol();
-    if (key.type == KEY_INPUT_CHAR){
-        if (key.symbol == 'i'){
-            status = EFI_INTERACT_MODE;
+    rootDir = LibOpenRoot(diskHandle);
+    if (rootDir==NULL){
+        return EFI_INVALID_PARAMETER;
+    }
+    UINTN counter = 0;
+    while (actualConfig){
+        actualConfig = actualConfig->next;
+        counter++;
+    }
+    workingCongigs = AllocatePool(counter * sizeof(CONFIG*));
+    actualConfig = configList;
+    counter = 0;
+    while (actualConfig){
+        //check if file exists
+        if (actualConfig->path){
+            status = uefi_call_wrapper(rootDir->Open, 5, rootDir, &fileHandle, actualConfig->path, EFI_FILE_MODE_READ, 0);
+            if (EFI_ERROR(status)){
+                Print(L"File for conf %s: %r \n",actualConfig->name, status);
+            }
+            else {
+                //working file
+                workingCongigs[counter] = actualConfig;
+                uefi_call_wrapper(fileHandle->Close, 1, fileHandle);
+                //print this file
+                Print(L"[%d] ",counter);
+                Print(L"%s\n",actualConfig->name);
+                counter++;
+            }
+        }
+        actualConfig = actualConfig->next;
+    }
+    uefi_call_wrapper(rootDir->Close, 1, rootDir);
+    while (1){
+        key = read_symbol();
+        if (key.type == KEY_INPUT_CHAR){
+            if (key.symbol == 'i'){
+                status = EFI_INTERACT_MODE;
+                break;
+            }
+        }
+        else if (key.type == KEY_INPUT_NUM){
+            if (counter==0){
+                Print(L"Maybe try interact mode?:\n");
+                continue;
+            }
+            if (key.number > counter) {
+                continue;
+            }
+            else {
+                outPath = FileDevicePath(diskHandle,workingCongigs[key.number]->path);
+                CHAR16 *tempPointer = workingCongigs[key.number]->options;
+                outOptions = AllocateZeroPool( (StrLen(tempPointer)+1) * sizeof(CHAR16));
+                CopyMem(outOptions,tempPointer,StrLen(tempPointer) * sizeof(CHAR16));
+                *path = outPath;
+                *options = outOptions;
+                status = EFI_SUCCESS;
+                break;
+            }
+        }
+        else {
+            //
+            status = EFI_INVALID_PARAMETER;
+            break;
         }
     }
-    else if (key.type == KEY_INPUT_NUM){
-        status = 0;
-    }
-    else {
-        //
-        status = EFI_INVALID_PARAMETER;
-    }
+    FreePool(workingCongigs);
     return status;
-    //todo free the config list
 }
 
 static EFI_STATUS interactive_mode (EFI_HANDLE diskHandle, EFI_DEVICE_PATH **path, CHAR16 **options) {
-    //todo list everything
+    EFI_DEVICE_PATH *tempPath = NULL;
+    CHAR16 *tempOptions = NULL;
     EFI_STATUS status = 0;
     KEY_INPUT key;
+    UINTN returnValue;
+    EFI_FILE *rootDir = NULL;
+    CHAR16 *pathString = NULL;
 
-    Print(L"INTERACTIVE_MODE\n");
+    rootDir = LibOpenRoot(diskHandle);
+    if (rootDir==NULL){
+        return EFI_INVALID_PARAMETER;
+    }
+    returnValue = list_directory(rootDir,&pathString);
+    Print(L"selected file: ");
+    if (returnValue>0){
+        Print(L"%s\n",pathString);
+        tempPath = FileDevicePath(diskHandle,pathString);
+        *path = tempPath;
+        *options = tempOptions;
+        FreePool(pathString);
+    }
+    else {
+        Print(L"\n");
+    }
 
     key = read_symbol();
     if (key.type == KEY_INPUT_CHAR || key.type == KEY_INPUT_NUM){
@@ -192,6 +602,20 @@ static EFI_STATUS interactive_mode (EFI_HANDLE diskHandle, EFI_DEVICE_PATH **pat
                 break;
             case 'i':
                 status = EFI_INTERACT_MODE;
+                break;
+            case 'r':
+                status = EFI_RESTART;
+                break;
+            case 's':
+                status = EFI_SHUTDOWN;
+                break;
+            case 'b':
+                if (returnValue>0){
+                    status = EFI_SUCCESS;
+                }
+                else {
+                    status = EFI_INVALID_PARAMETER;
+                }
                 break;
             default:
                 status = EFI_INVALID_PARAMETER;
@@ -224,6 +648,7 @@ static EFI_STATUS boot_efi (EFI_HANDLE parentImage, EFI_DEVICE_PATH *path, CHAR1
         return status;
     }
     if (options) {
+        Print(L"Booting with options:\n%s\n",options);
         EFI_LOADED_IMAGE *loadedNextImage;
 
         status = uefi_call_wrapper(BS->OpenProtocol, 6, nextImage, &LoadedImageProtocol, &loadedNextImage,
@@ -291,18 +716,45 @@ EFI_STATUS EFIAPI efi_main (EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTabl
     UINTN firstRun = 1;
     UINTN selection = 0;
     CONFIG *configList;
-    configList = AllocatePool(sizeof(CONFIG));
+    configList = AllocateZeroPool(sizeof(CONFIG));
+    configList->name = NULL;
     configList->next = NULL;
+    configList->previous = NULL;
 
-    status = get_config(loadedImage->DeviceHandle,L"\\EFI\\sefi\\sefi.conf",configList);
+    status = get_config(loadedImage->DeviceHandle,L"\\EFI\\sefi",configList);
+
+    CONFIG *temp = configList;
+    Print(L"DEBUG config\n");
+    while (temp){
+        Print(L"path: %s\n",temp->path);
+        Print(L"option: %s\n",temp->options);
+        temp = temp->next;
+    }
+
+
     if (EFI_ERROR(status)) {
         Print(L"Error: %r ", status);
         uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
-        FreePool(configList);
+        free_config(configList);
     }
     status = EFI_AUTO_MODE;
     while (1){
+        if (status == EFI_SHUTDOWN) {
+            free_config(configList);
+            FreePool(workingVolumes);
+            Print(L"Calling Shutdown:");
+            uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
+            status = uefi_call_wrapper(RT->ResetSystem, 4, EfiResetShutdown, EFI_SUCCESS, 0, NULL);
+        }
+        if (status == EFI_RESTART) {
+            free_config(configList);
+            FreePool(workingVolumes);
+            uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
+            status = uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS, 0, NULL);
+        }
+
         if (status == EFI_AUTO_MODE) {
+            Print(L"Auto mode:\n");
             if (firstRun) {
                 status = automatic_mode(loadedImage->DeviceHandle,configList,&path,&options);
                 firstRun = 0;
@@ -314,13 +766,13 @@ EFI_STATUS EFIAPI efi_main (EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTabl
             }
         }
         else if (status == EFI_INTERACT_MODE) {
-            UINTN selection;
+            Print(L"Interactive mode:\n");
             selection = list_disks(diskHandleBuff,workingVolumes,workingVolumesCount);
             status = interactive_mode(diskHandleBuff[selection],&path,&options);
             continue;
         }
         else if (EFI_ERROR(status)) {
-            FreePool(configList);
+            free_config(configList);
             FreePool(workingVolumes);
             Print(L"Error: %r ", status);
             uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
@@ -332,117 +784,8 @@ EFI_STATUS EFIAPI efi_main (EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTabl
         }
     }
     //Free used buffers
-    FreePool(configList);
+    free_config(configList);
     FreePool(workingVolumes);
     status = boot_efi(imageHandle,path,options);
-    return status;
-
-    /*EFI_DEVICE_PATH *pathDisk;
-    EFI_FILE *root_dir;
-    EFI_FILE_INFO *Info;
-    UINTN BufSize = SIZE_OF_EFI_FILE_INFO + 1024;
-
-    Info = AllocatePool(BufSize);
-    Print(L"Founded %d disks\n",diskHandleBuffSize);
-    CHAR16 *str;
-    for (index=0;index < diskHandleBuffSize; index++) {
-        pathDisk = DevicePathFromHandle(diskHandleBuff[index]);
-        str = DevicePathToStr(pathDisk);
-        Print(L"%s\n",str);
-        FreePool(str);
-
-        root_dir = LibOpenRoot(diskHandleBuff[index]);
-        if (!root_dir) {
-            Print(L"Unable to open root directory:\n");
-            //uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
-        }
-        else {
-            Print(L"Opened the root directory\n");
-            Print(L"Printing the content of root directory\n");
-
-
-            status = uefi_call_wrapper(root_dir->SetPosition,2,root_dir,0);
-            if (EFI_ERROR(status)) {
-                Print(L"Error setting root_dir possition: %r ", status);
-                uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
-                continue;
-            }
-
-            while (1){
-                BufSize = SIZE_OF_EFI_FILE_INFO + 1024;
-                status = uefi_call_wrapper(root_dir->Read,3,root_dir,&BufSize,Info);
-                if (EFI_ERROR(status)) {
-                    Print(L"Error opening root_dir: %r ", status);
-                    uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
-                    break;
-                }
-                if (BufSize == 0) {
-                    break;
-                }
-                if (Info->Attribute & EFI_FILE_DIRECTORY){
-                    Print(L"directory: ");
-                }
-                Print(L"%s\n",Info->FileName);
-            }
-
-            uefi_call_wrapper(root_dir->Close, 1, root_dir);
-        }
-
-    }
-    FreePool(Info);
-
-    EFI_INPUT_KEY key;
-    //Write and read from console
-    Print(L"\nSEFI boot-manager prototype\n");
-    Print(L"\n");
-    Print(L"Using disk: UUID\n");
-    Print(L"Found this automatic EFI entries:\n");
-    Print(L"1: \\EFI\\sefi\\test.efi \n");
-    Print(L"2: \\EFI\\Microsoft\\Boot\\bootmgfw.efi\n");
-    Print(L"3: \\EFI\\ubuntu\\grubx64.efi\n");
-    Print(L"4: \\EFI\\sefi\\kernel.efi\n");
-    Print(L"Press numeric key to select founded efi application\n");
-    Print(L"Press any key to manually search for efi executable");
-    Print(L">");
-    uefi_call_wrapper(BS->WaitForEvent, 3, 1, &ST->ConIn->WaitForKey, &index);
-    uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2, ST->ConIn, &key);
-
-    options = NULL;
-    path = FileDevicePath(loadedImage->DeviceHandle, L"\\EFI\\sefi\\test.efi");
-
-    switch (key.UnicodeChar) {
-        case '1':
-            ;
-            break;
-        case '2':
-            path = FileDevicePath(loadedImage->DeviceHandle, L"\\EFI\\Microsoft\\Boot\\bootmgfw.efi");
-            break;
-        case '3':
-            path = FileDevicePath(loadedImage->DeviceHandle, L"\\EFI\\ubuntu\\grubx64.efi");
-            break;
-        case '4':
-            path = FileDevicePath(loadedImage->DeviceHandle, L"\\EFI\\sefi\\kernel.efi");
-            //options = PoolPrint(L"root=UUID=5601cc87-5feb-4a8b-b848-5c830add82fc ro quiet rootfstype=ext4 add_efi_memmap initrd=\\EFI\\sefi\\initrd.img");
-            options = PoolPrint(L"root=UUID=bd70ce49-fc7c-4f62-94ad-cde47df26371 ro quiet rootfstype=ext4 add_efi_memmap initrd=\\EFI\\sefi\\initrd.img");
-            break;
-        case '8':
-            FreePool(path);
-            status = uefi_call_wrapper(RT->ResetSystem, 4, EfiResetShutdown, EFI_SUCCESS, 0, NULL);
-            Print(L"Error calling ResetSystem: %r", status);
-            uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
-            return status;
-            break;
-        case '9':
-            FreePool(path);
-            status = uefi_call_wrapper(RT->ResetSystem, 4, EfiResetCold, EFI_SUCCESS, 0, NULL);
-            Print(L"Error calling ResetSystem: %r", status);
-            uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
-            return status;
-            break;
-        default:
-            ;
-    }
-    FreePool(workingVolumes);
-    status = boot_efi(imageHandle,path,options);*/
     return status;
 }
