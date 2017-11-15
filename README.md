@@ -30,4 +30,4 @@ Compilation and Installation
 4. make sefi_manual
 5. copy compiled version to folder \EFI\sefi\ in your ESP
 6. use efibootmgr to add it to list od your computer boot entries
-..* sudo efibootmgr-c -d /dev/sda2 -p 2 -L "sEFI boot manager" -l "\efi\sefi\sefi.efi"
+sudo efibootmgr -c -d /dev/sda -p 2 -L "sEFI boot manager" -l "\efi\sefi\sefi.efi"
