@@ -14,9 +14,9 @@ set(LDFLAGS "-nostdlib -znocombreloc -T ${EFI_LDS} -shared -Bsymbolic -L ${GNUEF
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --std=c11 ${COMMONFLAGS}")
 
 set(SOURCE_FILES sefi.c)
-add_library(efiloader_broken SHARED ${SOURCE_FILES})
+add_library(sefi_broken SHARED ${SOURCE_FILES})
 set(CMAKE_SHARED_LINKER_FLAGS "${LDFLAGS}")
 
-add_custom_target(efiloader_manual COMMAND make -f Makefile.manual
+add_custom_target(sefi_manual COMMAND make -f Makefile.manual
                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )

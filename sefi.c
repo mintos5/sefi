@@ -1,29 +1,71 @@
+/**
+ * @file sefi.c
+ * @author Michal Skuta
+ * @date 15 Nov 2017
+ * @brief This file contains all needed code for sefi boot manager.
+ *
+ */
+
 #include <efi.h>
 #include <efilib.h>
+
+/** macro for specific max lines of screen output */
 #define MAX_LINES 13
+/** macro to specify working */
 #define EFI_AUTO_MODE 99
+/** macro to specify working */
 #define EFI_INTERACT_MODE 100
+/** macro to specify working */
 #define EFI_SHUTDOWN 101
+/** macro to specify working */
 #define EFI_RESTART 102
 
+/** macro to specify type of input (special characters) */
 #define KEY_INPUT_UNK 0
+/** macro to specify type of input (numbers)*/
 #define KEY_INPUT_NUM 1
+/** macro to specify type of input (alphabetic characters)*/
 #define KEY_INPUT_CHAR 2
 
+
+/**
+ * @brief Structure for linked list of boot configurations
+ *
+ * Structure to create linked list of boot configurations used in loading config from specific
+ * directory and in creating automatic boot entries in auto_mode.
+ */
 typedef struct config{
-    CHAR16 *name;
-    CHAR16 *path;
-    CHAR16 *options;
-    struct config *next;
-    struct config *previous;
+    CHAR16 *name;           /**< configurtation name CONFIG#name */
+    CHAR16 *path;           /**< path to efi executable CONFIG#path */
+    CHAR16 *options;        /**< options for executable CONFIG#options */
+    struct config *next;    /**< pointer for next config on linked list CONFIG#next */
+    struct config *previous;/**< pointer for previous config on linked list CONFIG#previous */
 }CONFIG;
 
+
+/**
+ * @brief Structure for keyaboard input
+ *
+ * Structure storing the user input from keyboard. It saves last key character, decimal value of number
+ * and type of input.
+ */
 typedef struct {
-    UINTN type;
-    UINTN number;
-    CHAR16 symbol;
+    UINTN type;     /**< type of input, using macros KEY_INPUT_UNK KEY_INPUT#type */
+    UINTN number;   /**< decimal value of user input KEY_INPUT#number */
+    CHAR16 symbol;  /**< last alphabetic character of user input KEY_INPUT#symbol */
 } KEY_INPUT;
 
+/**
+ * @brief Function to free memory of linked list
+ *
+ * Function to free memory of linked list. It is needed to traverse the linked list and remove all
+ * nodes of this list. To remove one node function needs to remove all variables
+ * created with AllocatePool(). We are using function FreePool().
+ *
+ *
+ * @param headConfigList head of linked list of configs
+ * @return VOID
+ */
 static VOID free_config(CONFIG *headConfigList){
     //go to the end of list:
     CONFIG * configList = headConfigList;
@@ -35,7 +77,7 @@ static VOID free_config(CONFIG *headConfigList){
     while (configList->next){
         configList = configList->next;
     }
-    //remove them
+    //remove all nodes from list
     while (configList){
         temp = configList->previous;
         if (configList->name){
@@ -56,6 +98,14 @@ static VOID read_line() {
     //todo enable changing of boot options for automatic and interactive mode
 }
 
+/**
+ * @brief Function to read input from users keyaboard
+ *
+ * Function writes a prompt '>' and waits for user input. After user accepts the input with enter key
+ * function creates KEY_INPUT variable
+ *
+ * @return KEY_INPUT variable containing user input
+ */
 static KEY_INPUT read_symbol(){
     EFI_STATUS status;
     KEY_INPUT out;
@@ -63,7 +113,7 @@ static KEY_INPUT read_symbol(){
     out.number = 0;
     UINTN index;
     EFI_INPUT_KEY key;
-
+    //Print prompt for user
     Print(L">");
     while (1){
         status = uefi_call_wrapper(ST->ConIn->ReadKeyStroke, 2, ST->ConIn, &key);
@@ -186,8 +236,18 @@ static KEY_INPUT read_symbol(){
     return out;
 }
 
+/**
+ * @brief Function to list bootable disks/volumes
+ *
+ * Function outputs all available bootable volumes. After that it waits for user input
+ *
+ *
+ * @param *diskHandleBuff buffer of handles to access disks on system
+ * @param *workingVolumes array of working and tested indices for diskHandleBuff
+ * @param workingVolumesCount size of workingVolumes array
+ * @return index of selected disk
+ */
 static UINTN list_disks(EFI_HANDLE *diskHandleBuff, UINTN *workingVolumes, UINTN workingVolumesCount){
-    //returns selected disk:
     UINTN index;
     CHAR16 *string;
     EFI_DEVICE_PATH *pathDisk;
@@ -201,7 +261,7 @@ static UINTN list_disks(EFI_HANDLE *diskHandleBuff, UINTN *workingVolumes, UINTN
     }
     KEY_INPUT key = read_symbol();
     if (key.type == KEY_INPUT_NUM){
-        if (key.number > workingVolumesCount){
+        if (key.number > (workingVolumesCount-1)){
             Print(L"Incorrect number selection, selecting first choice");
             return workingVolumes[0];
         }
@@ -215,6 +275,16 @@ static UINTN list_disks(EFI_HANDLE *diskHandleBuff, UINTN *workingVolumes, UINTN
     }
 }
 
+/**
+ * @brief Function to list all files on specific disk
+ *
+ * Function list all files in specific directory (root directory) and user can select the file
+ * or the next directory.
+ *
+ * @param *rootDir is handle to acces the files on disk or in directory
+ * @param **filePath is string, where we send full path of selected file
+ * @return size of CHAR16 string
+ */
 static UINTN list_directory(EFI_FILE *rootDir,CHAR16 **filePath) {
     EFI_STATUS status;
     KEY_INPUT key;
@@ -239,7 +309,8 @@ static UINTN list_directory(EFI_FILE *rootDir,CHAR16 **filePath) {
     while (1){
         //process input
         if (linesCounter>=MAX_LINES){
-            //this is not the last file
+            Print(L"Press i to cancel selecting files\n");
+            //this is not the last file of this directory
             if (bufSize != 0){
                 Print(L"Press n to show remaining files\n");
             }
@@ -248,7 +319,6 @@ static UINTN list_directory(EFI_FILE *rootDir,CHAR16 **filePath) {
             if (key.type == KEY_INPUT_CHAR || key.type == KEY_INPUT_UNK){
                 //continue with listing root_directory
                 if (key.symbol == 'i'){
-                    Print(L"Restarting to interactive mode\n");
                     FreePool(info);
                     return 0;
                 }
@@ -332,6 +402,7 @@ static UINTN list_directory(EFI_FILE *rootDir,CHAR16 **filePath) {
         }
         //the last file
         if (bufSize == 0) {
+            //with linesCounter set to specific We tell the functions to ask for user input
             linesCounter = MAX_LINES;
             continue;
         }
@@ -347,6 +418,17 @@ static UINTN list_directory(EFI_FILE *rootDir,CHAR16 **filePath) {
     }
 }
 
+/**
+ * @brief Function to load configs from specific directory
+ *
+ * Function to load all configurations files from specific folder structure
+ *
+ *
+ * @param diskHandle handle to read from disk
+ * @param *name pointer to name of directory containing config files
+ * @param *configList pointer to the head of list of configs
+ * @return EFI_STATUS representing success or error of this function
+ */
 static EFI_STATUS get_config(EFI_HANDLE diskHandle, const CHAR16 *name, CONFIG *configList){
     EFI_FILE_INFO *fileInfoDir = NULL;
     UINTN bufSize = SIZE_OF_EFI_FILE_INFO + 1024;
@@ -423,7 +505,7 @@ static EFI_STATUS get_config(EFI_HANDLE diskHandle, const CHAR16 *name, CONFIG *
             //handleItem creation
             status = uefi_call_wrapper(configDir->Open, 5, configDir, &handleItem, L"item.conf", EFI_FILE_MODE_READ, 0);
             if (EFI_ERROR(status)){
-                Print(L"Error getting to open item.conf: %r \n", status);
+                Print(L"Error getting to open item.conf in %s: %r \n", actualConfig->name, status);
                 FreePool(fileInfoDir);
                 uefi_call_wrapper(configDir->Close, 1, configDir);
                 continue;
@@ -455,7 +537,7 @@ static EFI_STATUS get_config(EFI_HANDLE diskHandle, const CHAR16 *name, CONFIG *
             //handleOption creation
             status = uefi_call_wrapper(configDir->Open, 5, configDir, &handleOption, L"options.conf", EFI_FILE_MODE_READ, 0);
             if (EFI_ERROR(status)){
-                Print(L"Error getting to open options.conf: %r \n", status);
+                Print(L"Error getting to open options.conf in %s: %r \n", actualConfig->name, status);
                 uefi_call_wrapper(configDir->Close, 1, configDir);
                 continue;
             }
@@ -488,6 +570,19 @@ static EFI_STATUS get_config(EFI_HANDLE diskHandle, const CHAR16 *name, CONFIG *
     return status;
 }
 
+/**
+ * @brief Function to search and list all boot entries from config files
+ *
+ * Function searches for boot entries and list them. Waits for user input.
+ * After the boot entry is selected, tries to load it.
+ *
+ *
+ * @param diskHandle handle to read from disk
+ * @param *configList pointer to the head of list of configs
+ * @param **path pointer specifying full path to efi file
+ * @param **options pointer to string of options
+ * @return EFI_STATUS representing success or error of this function
+ */
 static EFI_STATUS automatic_mode (EFI_HANDLE diskHandle, CONFIG *configList, EFI_DEVICE_PATH **path, CHAR16 **options) {
     EFI_DEVICE_PATH *outPath;
     CHAR16 *outOptions;
@@ -503,12 +598,15 @@ static EFI_STATUS automatic_mode (EFI_HANDLE diskHandle, CONFIG *configList, EFI
     if (rootDir==NULL){
         return EFI_INVALID_PARAMETER;
     }
+    //Get the size of list of configs
     UINTN counter = 0;
     while (actualConfig){
         actualConfig = actualConfig->next;
         counter++;
     }
+    //Create array of the same size, where the ponters to config will be stored
     workingCongigs = AllocatePool(counter * sizeof(CONFIG*));
+    //Test configs
     actualConfig = configList;
     counter = 0;
     while (actualConfig){
@@ -530,7 +628,10 @@ static EFI_STATUS automatic_mode (EFI_HANDLE diskHandle, CONFIG *configList, EFI
         }
         actualConfig = actualConfig->next;
     }
+    //Clean up
     uefi_call_wrapper(rootDir->Close, 1, rootDir);
+    Print(L"[i] to restart to interactive mode\n");
+    Print(L"Press corresponding number to boot\n");
     while (1){
         key = read_symbol();
         if (key.type == KEY_INPUT_CHAR){
@@ -568,6 +669,18 @@ static EFI_STATUS automatic_mode (EFI_HANDLE diskHandle, CONFIG *configList, EFI
     return status;
 }
 
+/**
+ * @brief Function to list all files on before selected disk
+ *
+ * Function list all files on disk. Waits for user input.
+ * After the file is selected, tries to load it.
+ *
+ *
+ * @param diskHandle handle to read from disk
+ * @param **path pointer specifying full path to efi file
+ * @param **options pointer to string of options
+ * @return EFI_STATUS representing success or error of this function
+ */
 static EFI_STATUS interactive_mode (EFI_HANDLE diskHandle, EFI_DEVICE_PATH **path, CHAR16 **options) {
     EFI_DEVICE_PATH *tempPath = NULL;
     CHAR16 *tempOptions = NULL;
@@ -576,7 +689,7 @@ static EFI_STATUS interactive_mode (EFI_HANDLE diskHandle, EFI_DEVICE_PATH **pat
     UINTN returnValue;
     EFI_FILE *rootDir = NULL;
     CHAR16 *pathString = NULL;
-
+    //Open rootDir to disk
     rootDir = LibOpenRoot(diskHandle);
     if (rootDir==NULL){
         return EFI_INVALID_PARAMETER;
@@ -593,6 +706,12 @@ static EFI_STATUS interactive_mode (EFI_HANDLE diskHandle, EFI_DEVICE_PATH **pat
     else {
         Print(L"\n");
     }
+    Print(L"[b] to boot selected file\n");
+    Print(L"[r] to restart your system\n");
+    Print(L"[s] to shutdown your system\n");
+    Print(L"[i] to restart interactive mode\n");
+    Print(L"[a] to start automatic mode on actual disk\n");
+
 
     key = read_symbol();
     if (key.type == KEY_INPUT_CHAR || key.type == KEY_INPUT_NUM){
@@ -627,15 +746,28 @@ static EFI_STATUS interactive_mode (EFI_HANDLE diskHandle, EFI_DEVICE_PATH **pat
     return status;
 }
 
+/**
+ * @brief Function to boot image
+ *
+ * Function to free memory of linked list. It is needed to traverse the linked list and remove all
+ * nodes of this list. To remove one node function needs to remove all variables
+ * created with AllocatePool(). We are using function FreePool().
+ *
+ *
+ * @param parentImage image of this program (sefi.efi)
+ * @param *path full path to efi file
+ * @param *options optional options for this file
+ * @return EFI_STATUS representing success or error of this function
+ */
 static EFI_STATUS boot_efi (EFI_HANDLE parentImage, EFI_DEVICE_PATH *path, CHAR16 *options) {
     EFI_STATUS status;
-
+    //Check if path is not NULL
     if (!path) {
         Print(L"Error getting device path.\n");
         uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
         return EFI_INVALID_PARAMETER;
     }
-
+    //Load image
     EFI_HANDLE nextImage;
     status = uefi_call_wrapper(BS->LoadImage, 6, FALSE, parentImage, path, NULL, 0, &nextImage);
     if (EFI_ERROR(status)) {
@@ -647,6 +779,7 @@ static EFI_STATUS boot_efi (EFI_HANDLE parentImage, EFI_DEVICE_PATH *path, CHAR1
         FreePool(path);
         return status;
     }
+    //Check if options is not NULL
     if (options) {
         Print(L"Booting with options:\n%s\n",options);
         EFI_LOADED_IMAGE *loadedNextImage;
@@ -664,6 +797,7 @@ static EFI_STATUS boot_efi (EFI_HANDLE parentImage, EFI_DEVICE_PATH *path, CHAR1
         loadedNextImage->LoadOptions = options;
         loadedNextImage->LoadOptionsSize = (StrLen(loadedNextImage->LoadOptions)+1) * sizeof(CHAR16);
     }
+    //Start the loaded image
     status = uefi_call_wrapper(BS->StartImage, 3, nextImage, NULL, NULL);
 
     //UNLOADING
@@ -673,12 +807,22 @@ static EFI_STATUS boot_efi (EFI_HANDLE parentImage, EFI_DEVICE_PATH *path, CHAR1
     return status;
 }
 
+/**
+ * @brief Main function of program
+ *
+ * Main function of program from where all other functions are called
+ *
+ *
+ * @param imageHandle handle of the current (sefi.efi) image
+ * @param systemTable UEFI system table
+ * @return EFI_STATUS representing success or error of this function
+ */
 EFI_STATUS EFIAPI efi_main (EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable) {
-    UINTN index, diskHandleBuffSize;                    //integer variables
+    UINTN index, diskHandleBuffSize;                //integer variables
     EFI_STATUS status;                              //return value from other functions
     EFI_LOADED_IMAGE *loadedImage;                  //variable to access EFI_LOADED_IMAGE_PROTOCOL
 
-    EFI_HANDLE *diskHandleBuff;                         //array of handlers for disks
+    EFI_HANDLE *diskHandleBuff;                     //array of handlers for disks
 
     InitializeLib(imageHandle, systemTable);
 
@@ -703,7 +847,7 @@ EFI_STATUS EFIAPI efi_main (EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTabl
     UINTN workingVolumesCount = 0;
     workingVolumes = AllocatePool(diskHandleBuffSize * sizeof(INTN));
     for (index=0;index < diskHandleBuffSize; index++) {
-
+        //Get root directory from disk handle
         rootDir = LibOpenRoot(diskHandleBuff[index]);
         if (rootDir) {
             workingVolumes[workingVolumesCount] = index;
@@ -714,17 +858,17 @@ EFI_STATUS EFIAPI efi_main (EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTabl
     EFI_DEVICE_PATH *path = NULL;
     CHAR16 *options = NULL;
     UINTN firstRun = 1;
-    UINTN selection = 0;
+    UINTN selection = 0;                            // variable to specify selected disk
     CONFIG *configList;
     configList = AllocateZeroPool(sizeof(CONFIG));
     configList->name = NULL;
     configList->next = NULL;
     configList->previous = NULL;
-
+    //Get configs from folder
     status = get_config(loadedImage->DeviceHandle,L"\\EFI\\sefi",configList);
 
     CONFIG *temp = configList;
-    Print(L"DEBUG config\n");
+    Print(L"Founded this configs:\n");
     while (temp){
         Print(L"path: %s\n",temp->path);
         Print(L"option: %s\n",temp->options);
@@ -737,6 +881,7 @@ EFI_STATUS EFIAPI efi_main (EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTabl
         uefi_call_wrapper(BS->Stall, 1, 3 * 1000 * 1000);
         free_config(configList);
     }
+    //Calling the help functions like automatic_mode or interactive_mode
     status = EFI_AUTO_MODE;
     while (1){
         if (status == EFI_SHUTDOWN) {
@@ -783,7 +928,7 @@ EFI_STATUS EFIAPI efi_main (EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTabl
             break;
         }
     }
-    //Free used buffers
+    //Free used buffers and boot from informations from helper functions
     free_config(configList);
     FreePool(workingVolumes);
     status = boot_efi(imageHandle,path,options);
